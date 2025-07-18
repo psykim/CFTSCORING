@@ -1246,11 +1246,35 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
                     // (이전 동물의 모든 범주가 아니라, 현재 클러스터가 공유하는 범주와 비교)
                     console.log(`현재 클러스터의 공유 범주:`, currentCluster.sharedCategories.map(cat => CATEGORIES[cat] || cat));
                     
-                    // 공통 범주 찾기 - 현재 동물과 현재 클러스터의 공유 범주 간의 교집합
-                    const sharedCategories = categories.filter(cat => currentCluster.sharedCategories.includes(cat));
-                    console.log('현재 동물과 클러스터의 공통 범주:', sharedCategories.map(cat => CATEGORIES[cat] || cat));
+                    // 클러스터 내 동물들과 현재 동물 간의 공통 범주 확인
+                    let hasCommonCategory = false;
+                    let commonCategoryWithCluster = [];
                     
-                    if (sharedCategories.length > 0) {
+                    // 현재 클러스터의 모든 동물과 비교
+                    for (const clusterAnimal of currentCluster.animals) {
+                        const clusterAnimalData = ANIMAL_CATEGORIES[clusterAnimal] || {};
+                        const clusterAnimalCategories = [];
+                        for (const [cat, value] of Object.entries(clusterAnimalData)) {
+                            if (value === true) {
+                                clusterAnimalCategories.push(cat);
+                            }
+                        }
+                        
+                        // 현재 동물과 클러스터 동물 간의 공통 범주
+                        const commonWithThis = categories.filter(cat => clusterAnimalCategories.includes(cat));
+                        if (commonWithThis.length > 0) {
+                            hasCommonCategory = true;
+                            commonWithThis.forEach(cat => {
+                                if (!commonCategoryWithCluster.includes(cat)) {
+                                    commonCategoryWithCluster.push(cat);
+                                }
+                            });
+                        }
+                    }
+                    
+                    console.log('클러스터 동물들과의 공통 범주:', commonCategoryWithCluster.map(cat => CATEGORIES[cat] || cat));
+                    
+                    if (hasCommonCategory) {
                         // 공통 범주가 있음 - 전환 아님
                         console.log('→ 전환 아님 (공통 범주 있음)');
                         currentCluster.animals.push(animal);
@@ -1267,7 +1291,7 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
                             categories: categories,
                             isSwitch: false,
                             reason: '공통 범주 있음',
-                            sharedWithPrev: sharedCategories
+                            sharedWithPrev: commonCategoryWithCluster
                         });
                     } else {
                         // 공통 범주가 없음 - 전환!
