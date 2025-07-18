@@ -138,6 +138,17 @@
             font-weight: bold;
         }
         
+        /* 질문 태그 스타일 */
+        .question-tag {
+            background-color: #ffe4b5;
+            border: 1px dashed #ff8c00;
+            opacity: 0.8;
+        }
+        
+        .question-tag:hover {
+            background-color: #ffd4a3;
+        }
+        
         .calculate-btn {
             flex: 1;
             padding: 15px;
@@ -907,8 +918,43 @@
                     <div class="score" id="switchingScore">0</div>
                 </div>
                 <div class="score-card">
-                    <h4>비효율전환<br>(Inefficient Switching)</h4>
+                    <h4>비효율전환<br>(Hard Switching)</h4>
                     <div class="score" id="inefficientSwitchingScore">0</div>
+                </div>
+            </div>
+            
+            <!-- 30초 반응 기반 점수 -->
+            <h3 style="margin-top: 30px; margin-bottom: 20px; color: #1976d2;">30초 반응 기반 점수</h3>
+            <div class="score-grid">
+                <div class="score-card">
+                    <h4>보속(30초)<br>(Perseveration-30s)</h4>
+                    <div class="score" id="first30SecPerseverationScore">0</div>
+                </div>
+                <div class="score-card">
+                    <h4>침투(30초)<br>(Intrusion-30s)</h4>
+                    <div class="score" id="first30SecIntrusionScore">0</div>
+                </div>
+                <div class="score-card">
+                    <h4>범주수(30초)<br>(Categories-30s)</h4>
+                    <div class="score" id="first30SecCategoryScore">0</div>
+                </div>
+                <div class="score-card">
+                    <h4>평균범주크기(30초)<br>(Mean Size-30s)</h4>
+                    <div class="score" id="first30SecAvgClusterSize">0</div>
+                </div>
+                <div class="score-card">
+                    <h4>최대범주크기(30초)<br>(Max Size-30s)</h4>
+                    <div class="score" id="first30SecMaxClusterSize">0</div>
+                </div>
+            </div>
+            <div class="score-grid" style="margin-top: 15px;">
+                <div class="score-card">
+                    <h4>전환(30초)<br>(Switching-30s)</h4>
+                    <div class="score" id="first30SecSwitchingScore">0</div>
+                </div>
+                <div class="score-card">
+                    <h4>비효율전환(30초)<br>(Hard Switching-30s)</h4>
+                    <div class="score" id="first30SecInefficient">0</div>
                 </div>
             </div>
             
@@ -1138,13 +1184,26 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             
             if (responses.length === 0) return { transitions: [], clusters: [], switchingScore: 0 };
             
+            // 중복 제거하여 unique한 동물만 남기되, 순서는 첫 출현 순서 유지
+            const seenAnimals = new Set();
+            const uniqueResponses = [];
+            
+            for (const response of responses) {
+                if (!seenAnimals.has(response.normalizedResponse)) {
+                    seenAnimals.add(response.normalizedResponse);
+                    uniqueResponses.push(response);
+                }
+            }
+            
+            console.log('중복 제거 후 동물들:', uniqueResponses.map(r => r.normalizedResponse));
+            
             const transitions = [];
             const clusters = [];
             let switchingScore = 0;
             let currentCluster = null;
             
-            for (let i = 0; i < responses.length; i++) {
-                const originalAnimal = responses[i].normalizedResponse;
+            for (let i = 0; i < uniqueResponses.length; i++) {
+                const originalAnimal = uniqueResponses[i].normalizedResponse;
                 // 변형 명칭을 기본 명칭으로 정규화
                 const normalizedAnimal = (typeof normalizeAnimalName === 'function') ? normalizeAnimalName(originalAnimal) : originalAnimal;
                 const animal = normalizedAnimal || originalAnimal;
@@ -1180,7 +1239,7 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
                         sharedWithPrev: null
                     });
                 } else {
-                    const prevAnimal = responses[i-1].normalizedResponse;
+                    const prevAnimal = uniqueResponses[i-1].normalizedResponse;
                     const prevAnimalData = ANIMAL_CATEGORIES[prevAnimal] || {};
                     
                     // 현재 클러스터의 공유 범주와 비교
@@ -1250,7 +1309,7 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
                 console.log(`마지막 클러스터 저장: ${currentCluster.animals.join(', ')}`);
                 clusters.push({
                     ...currentCluster,
-                    endIndex: responses.length - 1,
+                    endIndex: uniqueResponses.length - 1,
                     size: currentCluster.animals.length
                 });
             }
@@ -1277,7 +1336,30 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             const value = input.value.trim();
             
             if (value) {
-                responses[timeRange].push(value);
+                // 질문 패턴 감지 (물음표가 있거나 "~도 되요?", "~도 돼요?" 등의 패턴)
+                const isQuestion = value.includes('?') || 
+                                 /도\s*(되요|돼요|되나요|되나|됩니까|되니|되냐)/i.test(value) ||
+                                 /맞아요|맞나요|맞죠|맞습니까/i.test(value) ||
+                                 /할\s*수\s*있(어요|나요|습니까)/i.test(value) ||
+                                 /가능한가요|가능해요|가능합니까/i.test(value);
+                
+                if (isQuestion) {
+                    // 질문에서 동물 이름 추출 시도
+                    let extractedAnimal = value.replace(/[?？]/g, '') // 물음표 제거
+                        .replace(/도\s*(되요|돼요|되나요|되나|됩니까|되니|되냐).*/i, '') // 질문 부분 제거
+                        .replace(/.*?(맞아요|맞나요|맞죠|맞습니까).*/i, '')
+                        .replace(/.*?할\s*수\s*있(어요|나요|습니까).*/i, '')
+                        .replace(/.*?(가능한가요|가능해요|가능합니까).*/i, '')
+                        .trim();
+                    
+                    // 질문 표시를 위한 특별한 마커 추가
+                    responses[timeRange].push(`[질문] ${value}`);
+                    console.log(`질문 감지됨: "${value}" (동물: "${extractedAnimal}"는 정반응으로 처리하지 않음)`);
+                } else {
+                    // 일반 반응
+                    responses[timeRange].push(value);
+                }
+                
                 input.value = '';
                 displayResponses(timeRange);
             }
@@ -1291,12 +1373,16 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
         function displayResponses(timeRange) {
             const container = document.getElementById(`responses-${timeRange}`);
             container.innerHTML = responses[timeRange]
-                .map((response, index) => 
-                    `<span class="response-tag">
-                        ${response}
+                .map((response, index) => {
+                    const isQuestion = response.startsWith('[질문]');
+                    const displayText = isQuestion ? response.substring(5) : response;
+                    const className = isQuestion ? 'response-tag question-tag' : 'response-tag';
+                    
+                    return `<span class="${className}" title="${isQuestion ? '질문은 정반응으로 처리되지 않습니다' : ''}">
+                        ${displayText}${isQuestion ? ' ❓' : ''}
                         <span class="remove" onclick="removeResponse('${timeRange}', ${index})">×</span>
-                    </span>`
-                ).join('');
+                    </span>`;
+                }).join('');
         }
         
         function calculateScores() {
@@ -1310,6 +1396,12 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             ['0-15', '15-30', '30-45', '45-60'].forEach(range => {
                 console.log(`Processing range ${range}:`, responses[range]);
                 responses[range].forEach(response => {
+                    // 질문으로 표시된 항목은 건너뛰기
+                    if (response.startsWith('[질문]')) {
+                        console.log(`질문 항목 제외: ${response}`);
+                        return;
+                    }
+                    
                     // 변형 명칭을 기본 명칭으로 정규화
                     const trimmed = response.trim();
                     const normalized = (typeof normalizeAnimalName === 'function') ? normalizeAnimalName(trimmed) : null;
@@ -1420,6 +1512,49 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             // 9. 비효율전환점수 (크기 1인 클러스터 수)
             let inefficientSwitchingScore = clusters.filter(c => c.size === 1).length;
             
+            // 10. 30초 반응 기반 점수 계산
+            const first30SecResponses = allResponses.filter(r => 
+                (r.timeRange === '0-15' || r.timeRange === '15-30')
+            );
+            
+            // 30초 반응 중 정반응만 필터
+            const first30SecValidResponses = first30SecResponses.filter(r => r.normalizedResponse !== null);
+            
+            // 30초 보속 점수
+            const first30SecResponseCount = {};
+            first30SecValidResponses.forEach(r => {
+                first30SecResponseCount[r.normalizedResponse] = (first30SecResponseCount[r.normalizedResponse] || 0) + 1;
+            });
+            const first30SecPerseverationScore = Object.values(first30SecResponseCount)
+                .filter(count => count > 1)
+                .reduce((sum, count) => sum + (count - 1), 0);
+            
+            // 30초 침투 점수
+            const first30SecIntrusionScore = first30SecResponses.filter(r => r.normalizedResponse === null).length;
+            
+            // 30초 전환 분석
+            const { transitions: first30SecTransitions, clusters: first30SecClusters, switchingScore: first30SecSwitchingScore } = 
+                analyzeTransitionsAndClusters(first30SecValidResponses);
+            
+            // 30초 범주 점수
+            const first30SecUsedCategories = new Set();
+            first30SecClusters.forEach(cluster => {
+                if (cluster.sharedCategories.length > 0) {
+                    first30SecUsedCategories.add(cluster.sharedCategories[0]);
+                }
+            });
+            const first30SecCategoryScore = first30SecUsedCategories.size;
+            
+            // 30초 비효율전환 점수
+            const first30SecInefficient = first30SecClusters.filter(c => c.size === 1).length;
+            
+            // 30초 평균 범주크기와 최대범주크기 계산
+            const first30SecClusterSizes = first30SecClusters.map(c => c.size);
+            const first30SecAvgClusterSize = first30SecClusterSizes.length > 0 
+                ? first30SecClusterSizes.reduce((sum, size) => sum + size, 0) / first30SecClusterSizes.length
+                : 0;
+            const first30SecMaxClusterSize = Math.max(...first30SecClusterSizes, 0);
+            
             // 결과 표시
             document.getElementById('totalScore').textContent = totalScore;
             document.getElementById('firstHalfScore').textContent = firstHalfScore;
@@ -1431,6 +1566,15 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             document.getElementById('categoryScore').textContent = categoryScore;
             document.getElementById('avgClusterSize').textContent = avgClusterSize.toFixed(1);
             document.getElementById('maxClusterSize').textContent = maxClusterSize;
+            
+            // 30초 기반 점수 표시
+            document.getElementById('first30SecPerseverationScore').textContent = first30SecPerseverationScore;
+            document.getElementById('first30SecIntrusionScore').textContent = first30SecIntrusionScore;
+            document.getElementById('first30SecSwitchingScore').textContent = first30SecSwitchingScore;
+            document.getElementById('first30SecCategoryScore').textContent = first30SecCategoryScore;
+            document.getElementById('first30SecInefficient').textContent = first30SecInefficient;
+            document.getElementById('first30SecAvgClusterSize').textContent = first30SecAvgClusterSize.toFixed(1);
+            document.getElementById('first30SecMaxClusterSize').textContent = first30SecMaxClusterSize;
             
             // 점수 계산 상세 과정 표 표시
             const detailTableHtml = `
@@ -2274,6 +2418,19 @@ ID,성별,연령,학력,0-15초,15-30초,30-45초,45-60초
             ['0-15', '15-30', '30-45', '45-60'].forEach(range => {
                 data.responses[range].forEach(response => {
                     const trimmed = response.trim();
+                    
+                    // 질문 패턴 감지 (CSV에서도 동일한 로직 적용)
+                    const isQuestion = trimmed.includes('?') || 
+                                     /도\s*(되요|돼요|되나요|되나|됩니까|되니|되냐)/i.test(trimmed) ||
+                                     /맞아요|맞나요|맞죠|맞습니까/i.test(trimmed) ||
+                                     /할\s*수\s*있(어요|나요|습니까)/i.test(trimmed) ||
+                                     /가능한가요|가능해요|가능합니까/i.test(trimmed);
+                    
+                    if (isQuestion) {
+                        console.log(`CSV에서 질문 항목 제외: ${trimmed}`);
+                        return; // 질문은 처리하지 않음
+                    }
+                    
                     const normalized = (typeof normalizeAnimalName === 'function') ? normalizeAnimalName(trimmed) : null;
                     const finalNormalized = normalized || (ANIMAL_CATEGORIES[trimmed] ? trimmed : null);
                     
